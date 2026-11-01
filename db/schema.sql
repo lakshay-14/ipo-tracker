@@ -28,3 +28,15 @@ create table gmp_history (
   gmp numeric not null,                          -- GMP value recorded that day
   recorded_at timestamptz not null default now() -- when this GMP snapshot was stored
 );
+
+create table subscribers (
+  chat_id bigint primary key,                    -- Telegram chat that receives alerts
+  username text,                                 -- Telegram @username, if the user has one
+  active boolean not null default true,          -- false after the user sends /stop
+  created_at timestamptz not null default now(), -- when they first sent /start
+  updated_at timestamptz not null default now()  -- when they last started or stopped
+);
+
+-- Only the server (secret key) may read or write subscribers.
+-- RLS on with no policies blocks the public publishable key.
+alter table subscribers enable row level security;

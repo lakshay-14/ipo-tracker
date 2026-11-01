@@ -8,6 +8,7 @@ import {
   formatPriceBand,
   formatRupees,
   minInvestment,
+  todayInIndia,
 } from "@/lib/format";
 import { getIpo } from "@/lib/ipos";
 
@@ -42,11 +43,14 @@ export default async function IpoPage({ params }: PageProps<"/ipo/[id]">) {
         <Fact label="Issue size" value={formatIssueSize(ipo.issue_size_cr)} />
         <Fact label="Minimum investment" value={formatRupees(minInvestment(ipo))} />
       </dl>
-      <p className="mt-3 text-sm text-muted">
-        GMP <span className="font-medium tabular-nums text-foreground">{formatRupees(ipo.gmp)}</span>
-        {ipo.gmp_updated_at && ` · updated ${formatDate(ipo.gmp_updated_at.slice(0, 10))}`}
-        {" · "}unofficial, can change quickly
-      </p>
+      {/* GMP has no data source yet. Hide the line until it does. */}
+      {ipo.gmp != null && (
+        <p className="mt-3 text-sm text-muted">
+          GMP <span className="font-medium tabular-nums text-foreground">{formatRupees(ipo.gmp)}</span>
+          {ipo.gmp_updated_at && ` · updated ${formatDate(ipo.gmp_updated_at.slice(0, 10))}`}
+          {" · "}unofficial, can change quickly
+        </p>
+      )}
 
       {/* Timeline */}
       <Section title="Timeline">
@@ -77,11 +81,6 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 // ---------- Timeline ----------
-
-// Today's date in India, as "YYYY-MM-DD".
-function todayInIndia() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
 
 // Which step is happening now: 0 open, 1 closed, 2 allotment, 3 listed.
 // -1 means the IPO has not opened yet.

@@ -58,3 +58,8 @@ export function minInvestment(ipo: Ipo) {
   if (ipo.lot_size == null || ipo.price_band_high == null) return null;
   return ipo.lot_size * ipo.price_band_high;
 }
+
+// Today's date in India, as "YYYY-MM-DD".
+export function todayInIndia() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
