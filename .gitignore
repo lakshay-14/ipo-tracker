@@ -5,3 +5,6 @@ __pycache__
 
 # Next.js website secrets
 web/.env.local
+
+# macOS folder files
+.DS_Store
