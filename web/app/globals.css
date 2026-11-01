@@ -1,5 +1,53 @@
 @import "tailwindcss";
 
+/* Color tokens. Light mode first, dark mode follows the system setting. */
+:root {
+  --background: #fafafa;
+  --surface: #ffffff;
+  --subtle: #f4f4f5;
+  --foreground: #0a0a0a;
+  --muted: #71717a;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+  --accent: #4338ca;
+  --accent-foreground: #ffffff;
+  --accent-soft: #eef2ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --surface: #111113;
+    --subtle: #1c1c1f;
+    --foreground: #ededed;
+    --muted: #a1a1aa;
+    --line: #27272a;
+    --line-strong: #3f3f46;
+    --accent: #818cf8;
+    --accent-foreground: #0a0a0a;
+    --accent-soft: #1e1b4b;
+  }
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
+
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  -webkit-text-size-adjust: 100%;
 }

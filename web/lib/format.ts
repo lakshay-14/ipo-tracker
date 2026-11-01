@@ -17,6 +17,10 @@ export type Ipo = {
   gmp: number | null;
   gmp_updated_at: string | null;
   updated_at: string;
+  // Not filled by the pipeline yet. Empty until the columns have data.
+  business_summary?: string | null;
+  strengths?: string[] | null;
+  risks?: string[] | null;
 };
 
 const rupee = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
@@ -53,12 +57,4 @@ export function formatDate(value: string | null) {
 export function minInvestment(ipo: Ipo) {
   if (ipo.lot_size == null || ipo.price_band_high == null) return null;
   return ipo.lot_size * ipo.price_band_high;
-}
-
-// Short range for cards, e.g. "30 Oct – 4 Nov 2026".
-export function formatDateRange(start: string | null, end: string | null) {
-  if (!start || !end) return `${formatDate(start)} – ${formatDate(end)}`;
-  const sameYear = start.slice(0, 4) === end.slice(0, 4);
-  const startText = sameYear ? formatDate(start).replace(/ \d{4}$/, "") : formatDate(start);
-  return `${startText} – ${formatDate(end)}`;
 }

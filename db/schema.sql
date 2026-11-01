@@ -16,7 +16,10 @@ create table ipos (
   issue_size_cr numeric,                         -- total issue size in crore
   gmp numeric,                                   -- unofficial grey market premium (Rs)
   gmp_updated_at timestamptz,                    -- when GMP was last refreshed
-  updated_at timestamptz not null default now()  -- when this IPO row last changed
+  updated_at timestamptz not null default now(), -- when this IPO row last changed
+  business_summary text,                         -- short plain summary of the business (from the RHP)
+  strengths text[],                              -- short list of positives
+  risks text[]                                   -- short list of risks
 );
 
 create table gmp_history (

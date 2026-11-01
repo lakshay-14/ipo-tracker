@@ -2,12 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import {
-  type Ipo,
-  formatDateRange,
-  formatIssueSize,
-  formatPriceBand,
-} from "@/lib/format";
+import { StatusDot, segmentLabel } from "@/components/status";
+import { type Ipo, formatDate, formatPriceBand } from "@/lib/format";
 
 const TABS = [
   { key: "open", label: "Open" },
@@ -40,46 +36,59 @@ export default function IpoList({ ipos }: { ipos: Ipo[] }) {
 
   return (
     <div>
-      {/* Open / Upcoming / Closed tabs */}
-      <div className="grid grid-cols-3 rounded-lg bg-slate-100 p-1 text-sm font-medium">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`rounded-md py-2 transition ${
-              tab === t.key
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            {t.label} ({ipos.filter((ipo) => inTab(ipo, t.key)).length})
-          </button>
-        ))}
-      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Open / Upcoming / Closed segmented control */}
+        <div className="grid grid-cols-3 rounded-xl bg-subtle p-1 sm:w-[360px]">
+          {TABS.map((t) => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                aria-pressed={active}
+                className={`h-10 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                  active
+                    ? "bg-surface text-foreground ring-1 ring-line"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                {t.label}
+                <span className="ml-1.5 tabular-nums text-muted">
+                  {ipos.filter((ipo) => inTab(ipo, t.key)).length}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Mainboard / SME filter */}
-      <div className="mt-3 flex gap-2 text-sm">
-        {SEGMENTS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setSegment(s.key)}
-            className={`rounded-full border px-3 py-1 transition ${
-              segment === s.key
-                ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-300 text-slate-600 hover:border-slate-500"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
+        {/* Mainboard / SME filter */}
+        <div className="flex gap-1.5">
+          {SEGMENTS.map((s) => {
+            const active = segment === s.key;
+            return (
+              <button
+                key={s.key}
+                onClick={() => setSegment(s.key)}
+                aria-pressed={active}
+                className={`h-9 rounded-lg border px-3 text-sm transition-colors duration-150 ${
+                  active
+                    ? "border-transparent bg-accent-soft font-medium text-accent"
+                    : "border-line text-muted hover:border-line-strong hover:text-foreground"
+                }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {shown.length === 0 ? (
-        <p className="mt-10 text-center text-sm text-slate-500">
+        <p className="mt-6 rounded-xl border border-dashed border-line py-16 text-center text-sm text-muted">
           No IPOs here right now.
         </p>
       ) : (
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+        <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((ipo) => (
             <li key={ipo.id}>
               <IpoCard ipo={ipo} />
@@ -92,47 +101,34 @@ export default function IpoList({ ipos }: { ipos: Ipo[] }) {
 }
 
 function IpoCard({ ipo }: { ipo: Ipo }) {
+  const closeWord = ipo.status === "open" || ipo.status === "upcoming" ? "Closes" : "Closed";
   return (
     <Link
       href={`/ipo/${ipo.id}`}
-      className="block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-slate-400 hover:shadow-sm"
+      className="flex h-full flex-col rounded-xl border border-line bg-surface p-5 transition-colors duration-150 hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 className="font-semibold leading-snug text-slate-900">
-          {ipo.company_name}
-        </h2>
-        <SegmentBadge segment={ipo.segment} />
+        <h2 className="font-semibold leading-snug tracking-tight">{ipo.company_name}</h2>
+        <StatusDot status={ipo.status} />
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <Field label="Price band" value={formatPriceBand(ipo)} />
-        <Field label="Lot size" value={ipo.lot_size?.toString() ?? "—"} />
-        <Field label="Issue size" value={formatIssueSize(ipo.issue_size_cr)} />
-        <Field label="Dates" value={formatDateRange(ipo.open_date, ipo.close_date)} />
+      <dl className="mt-5 grid grid-cols-2 gap-4">
+        <KeyNumber label="Price band" value={formatPriceBand(ipo)} />
+        <KeyNumber label="Lot size" value={ipo.lot_size?.toString() ?? "—"} />
       </dl>
+
+      <p className="mt-auto pt-5 text-sm text-muted">
+        {segmentLabel(ipo.segment)} · {closeWord} {formatDate(ipo.close_date)}
+      </p>
     </Link>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function KeyNumber({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="font-medium text-slate-800">{value}</dd>
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-1 text-lg font-medium tabular-nums tracking-tight">{value}</dd>
     </div>
-  );
-}
-
-export function SegmentBadge({ segment }: { segment: Ipo["segment"] }) {
-  return (
-    <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-        segment === "sme"
-          ? "bg-amber-100 text-amber-800"
-          : "bg-sky-100 text-sky-800"
-      }`}
-    >
-      {segment === "sme" ? "SME" : "Mainboard"}
-    </span>
   );
 }
