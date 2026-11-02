@@ -40,3 +40,15 @@ create table subscribers (
 -- Only the server (secret key) may read or write subscribers.
 -- RLS on with no policies blocks the public publishable key.
 alter table subscribers enable row level security;
+
+create table alerts_sent (
+  id uuid primary key default gen_random_uuid(), -- unique row id
+  ipo_id uuid not null references ipos (id) on delete cascade, -- which IPO the alert was about
+  alert_type text not null check (alert_type in ('open', 'close', 'allotment', 'listing')), -- which key date
+  alert_date date not null,                      -- the IST day the alert was for
+  sent_at timestamptz not null default now(),    -- when the alert went out
+  unique (ipo_id, alert_type, alert_date)        -- never send the same alert twice
+);
+
+-- Only the server (secret key) may read or write alerts_sent.
+alter table alerts_sent enable row level security;
