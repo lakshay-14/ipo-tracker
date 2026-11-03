@@ -1,7 +1,8 @@
-"""Send daily Telegram alerts for IPOs that open, close, allot or list today (IST).
+"""Send one daily Telegram digest of IPOs that close, open, allot or list today (IST).
 
-Each alert goes to every active subscriber once. Sent alerts are saved in
-alerts_sent so a second run on the same day sends nothing new.
+Every active subscriber gets one digest (split in two if it is too long for
+Telegram). Sent alerts are saved in alerts_sent so a second run on the same
+day sends nothing new.
 
 Usage:
   python pipeline/send_alerts.py                      # send for real
@@ -26,14 +27,15 @@ load_dotenv(ROOT / ".env")
 SITE_URL = "https://ipo-tracker-eta.vercel.app/"
 TELEGRAM_API = "https://api.telegram.org"
 MESSAGE_GAP_SECONDS = 0.1
+MAX_MESSAGE_LENGTH = 4000  # Telegram's limit is 4096; keep some room
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# alert_type -> (ipos column, headline, date label)
+# alert_type -> (ipos column, section title), in the order they appear in the digest
 ALERT_TYPES = {
-    "open": ("open_date", "Opens today", "Opens"),
-    "close": ("close_date", "Closes today", "Closes"),
-    "allotment": ("allotment_date", "Allotment today", "Allotment"),
-    "listing": ("listing_date", "Lists today", "Listing"),
+    "close": ("close_date", "Closing today"),
+    "open": ("open_date", "Opening today"),
+    "allotment": ("allotment_date", "Allotment today"),
+    "listing": ("listing_date", "Listing today"),
 }
 
 
@@ -75,21 +77,54 @@ def format_date(value):
     return f"{day.day} {day.strftime('%b %Y')}"
 
 
-def build_message(ipo, alert_type):
-    column, headline, date_label = ALERT_TYPES[alert_type]
+def ipo_line(ipo):
+    """One line per IPO: name, segment, price band and lot size."""
     segment = "SME" if ipo.get("segment") == "sme" else "Mainboard"
     lot = f"{ipo['lot_size']} shares" if ipo.get("lot_size") else "Not announced"
-    return (
-        f"{headline}: {ipo['company_name']} ({segment})\n"
-        f"\n"
-        f"Price band: {format_price_band(ipo)}\n"
-        f"Lot size: {lot}\n"
-        f"{date_label}: {format_date(ipo[column])}\n"
-        f"\n"
-        f"{SITE_URL}\n"
-        f"\n"
-        f"Not investment advice."
+    return f"• {ipo['company_name']} ({segment}) · {format_price_band(ipo)} · Lot: {lot}"
+
+
+def build_digest(alerts, today):
+    """Turn [(ipo, alert_type)] into a list of message texts (usually one).
+
+    Sections follow the order of ALERT_TYPES and empty ones are skipped. If the
+    text is longer than MAX_MESSAGE_LENGTH it is split at line breaks.
+    """
+    title = f"IPO alerts for {format_date(today.isoformat())}"
+    footer = f"{SITE_URL}\n\nNot investment advice."
+
+    sections = []
+    for alert_type, (_, section_title) in ALERT_TYPES.items():
+        lines = [ipo_line(ipo) for ipo, kind in alerts if kind == alert_type]
+        if lines:
+            sections.append((section_title, lines))
+
+    whole = "\n\n".join(
+        [title] + [f"{name}\n" + "\n".join(lines) for name, lines in sections] + [footer]
     )
+    if len(whole) <= MAX_MESSAGE_LENGTH:
+        return [whole]
+
+    # Too long: fill one message line by line, then start the next. A section
+    # that carries over gets its title again with "(continued)".
+    messages, current = [], title
+    for name, lines in sections:
+        header = name
+        for line in lines:
+            addition = f"\n\n{header}\n{line}" if header else f"\n{line}"
+            if len(current) + len(addition) > MAX_MESSAGE_LENGTH:
+                messages.append(current)
+                current = f"{name} (continued)\n{line}"
+            else:
+                current += addition
+            header = None
+    if len(current) + len(footer) + 2 > MAX_MESSAGE_LENGTH:
+        messages.append(current)
+        current = footer
+    else:
+        current += f"\n\n{footer}"
+    messages.append(current)
+    return messages
 
 
 # ---------- Database ----------
@@ -97,7 +132,7 @@ def build_message(ipo, alert_type):
 def find_alerts(client, today):
     """Return [(ipo, alert_type)] for every key date that falls on today."""
     day = today.isoformat()
-    columns = [column for column, _, _ in ALERT_TYPES.values()]
+    columns = [column for column, _ in ALERT_TYPES.values()]
     result = (
         client.table("ipos")
         .select("*")
@@ -106,7 +141,7 @@ def find_alerts(client, today):
     )
     alerts = []
     for ipo in result.data or []:
-        for alert_type, (column, _, _) in ALERT_TYPES.items():
+        for alert_type, (column, _) in ALERT_TYPES.items():
             if ipo.get(column) == day:
                 alerts.append((ipo, alert_type))
     return alerts
@@ -217,52 +252,60 @@ def main():
         chat_ids = active_chat_ids(client)
     print(f"Alerts to send: {len(alerts)} (already sent today: {skipped}). Recipients: {len(chat_ids)}.")
 
-    session = requests.Session()
-    sent = failed = blocked = 0
-    blocked_chats = set()
+    if not alerts:
+        print("Nothing new to send today.")
+        return
 
-    for ipo, alert_type in alerts:
-        text = build_message(ipo, alert_type)
+    messages = build_digest(alerts, today)
 
-        if args.dry_run:
-            print(f"\n--- {alert_type}: {ipo['company_name']} (would go to {len(chat_ids)} chats) ---")
+    if args.dry_run:
+        for number, text in enumerate(messages, start=1):
+            print(f"\n--- Message {number} of {len(messages)} (would go to {len(chat_ids)} chats) ---")
             print(text)
-            continue
+        print()
+        print("Summary")
+        print(f"  Alerts in digest: {len(alerts)}")
+        print(f"  Messages per subscriber: {len(messages)}")
+        print("  Dry run: no messages sent, nothing saved.")
+        return
 
-        print(f"Sending {alert_type}: {ipo['company_name']}")
-        sent_this_alert = 0
-        for chat_id in chat_ids:
-            if chat_id in blocked_chats:
-                continue
+    session = requests.Session()
+    reached = failed = blocked = 0
+
+    for chat_id in chat_ids:
+        # Send every part of the digest; stop early if one part fails.
+        result = "sent"
+        for text in messages:
             result = send_message(session, token, chat_id, text)
-            if result == "sent":
-                sent += 1
-                sent_this_alert += 1
-            else:
-                failed += 1
-                if result == "blocked":
-                    blocked += 1
-                    blocked_chats.add(chat_id)
-                    print(f"  chat {chat_id}: blocked the bot, marking inactive")
-                    try:
-                        deactivate(client, chat_id)
-                    except Exception as exc:  # not worth stopping the other alerts
-                        print(f"  chat {chat_id}: could not mark inactive: {exc}", file=sys.stderr)
             time.sleep(MESSAGE_GAP_SECONDS)
+            if result != "sent":
+                break
 
-        # Save only real runs that reached someone, so a failed run can be retried.
-        if args.test_chat_id is None and sent_this_alert > 0:
+        if result == "sent":
+            reached += 1
+            continue
+        failed += 1
+        if result == "blocked":
+            blocked += 1
+            print(f"  chat {chat_id}: blocked the bot, marking inactive")
+            try:
+                deactivate(client, chat_id)
+            except Exception as exc:  # not worth stopping the other chats
+                print(f"  chat {chat_id}: could not mark inactive: {exc}", file=sys.stderr)
+
+    # Save only real runs that reached someone, so a failed run can be retried.
+    if args.test_chat_id is None and reached > 0:
+        for ipo, alert_type in alerts:
             save_sent(client, ipo["id"], alert_type, today)
 
     print()
     print("Summary")
-    print(f"  Alerts found:  {len(alerts)}")
-    if args.dry_run:
-        print("  Dry run: no messages sent, nothing saved.")
-    else:
-        print(f"  Messages sent: {sent}")
-        print(f"  Failed:        {failed} (blocked the bot: {blocked})")
-
+    print(f"  Alerts in digest:        {len(alerts)}")
+    print(f"  Messages per subscriber: {len(messages)}")
+    print(f"  Subscribers reached:     {reached}")
+    print(f"  Failed:                  {failed} (blocked the bot: {blocked})")
+    if args.test_chat_id is not None:
+        print("  Test mode: nothing saved.")
 
 if __name__ == "__main__":
     main()
