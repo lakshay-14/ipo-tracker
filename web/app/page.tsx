@@ -1,4 +1,5 @@
 import { getIpos } from "@/lib/ipos";
+import { TelegramBanner } from "@/components/telegram";
 import IpoList from "./ipo-list";
 
 export default async function Home() {
@@ -10,6 +11,9 @@ export default async function Home() {
       <p className="mt-2 text-[15px] text-muted">
         Every mainboard and SME IPO in one place. Updated daily.
       </p>
+      <div className="mt-6">
+        <TelegramBanner />
+      </div>
       <div className="mt-8">
         <IpoList ipos={ipos} />
       </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist } from "next/font/google";
+import { TelegramButton } from "@/components/telegram";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,13 +21,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
         <header className="sticky top-0 z-20 border-b border-line bg-background/80 backdrop-blur">
-          <div className={`${container} flex h-14 items-center`}>
+          <div className={`${container} flex h-14 items-center justify-between gap-4`}>
             <Link
               href="/"
               className="text-[15px] font-semibold tracking-tight transition-opacity duration-150 hover:opacity-70"
             >
               IPO Tracker
             </Link>
+            <TelegramButton />
           </div>
         </header>
 
